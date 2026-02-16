@@ -1,0 +1,982 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=420, height=620" />
+    <!--
+  布局（window.py: 折叠 80×96, 展开 400×600）:
+  按钮|外环|内环|透明球 四者位置固定（贴右），仅 Live2D 随展开/折叠变化
+  折叠：Live2D 缩小在透明球后 | 按钮 | 外环 | 内环 | 透明球
+  展开：Live2D 铺满左侧        | 按钮 | 外环 | 内环 | 透明球
+  -->
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent !important;
+        font-family: system-ui, sans-serif;
+      }
+      /* 全屏内容区域：三个并列容器 */
+      #full-panel {
+        width: 100%;
+        height: 100%;
+        position: relative;
+        display: flex;
+        align-items: center;
+        overflow: visible;
+      }
+      /* 按钮|外环|内环|透明球 四者位置固定，按钮与小球同球心 */
+      #btn-area {
+        position: absolute;
+        width: 80px;
+        height: 80px;
+        right: -22px;
+        top: 50%;
+        margin-top: -33px;
+        z-index: 20;
+        overflow: visible;
+        pointer-events: none;
+      }
+      #btn-area .glass-btn {
+        pointer-events: auto;
+      }
+      /* Live2D 仅此项随展开/折叠变化，四者位置不变 */
+      #live2d-area {
+        position: absolute;
+        background: transparent;
+        pointer-events: none;
+        overflow: hidden;
+        top: 0;
+        bottom: 0;
+        z-index: 1;
+      }
+      /* 折叠：Live2D 缩小在透明球后 */
+      #full-panel:not(.expanded) #live2d-area {
+        width: 44px;
+        right: 0;
+        top: 50%;
+        bottom: auto;
+        margin-top: -22px;
+        height: 44px;
+      }
+      /* 展开：Live2D 铺满左侧，留出四者区域 80px */
+      #full-panel.expanded #live2d-area {
+        left: 0;
+        right: 80px;
+        width: auto;
+        height: auto;
+      }
+      #live2d-area #live2d-wrap {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+      #live2d-area canvas {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        pointer-events: none;
+      }
+      /* 小球容器：外环 36px / 内环 26px / 透明球(中心)，位置固定 */
+      #ball-area {
+        position: absolute;
+        width: 44px;
+        height: 44px;
+        right: 0;
+        top: 50%;
+        margin-top: -22px;
+        z-index: 15;
+        overflow: visible;
+      }
+      #ball {
+        display: flex;
+        width: 44px;
+        height: 44px;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        position: relative;
+        overflow: visible;
+      }
+      #ball .rings {
+        position: relative;
+        width: 36px;
+        height: 36px;
+        pointer-events: none;
+      }
+      /* 圆环中心透明隐藏：::before 仅悬停时显示光晕，默认完全透明 */
+      #ball .rings::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 38px;
+        height: 38px;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        border: none;
+        background: transparent;
+        box-shadow: none;
+        opacity: 0;
+        transition:
+          opacity 0.2s ease,
+          box-shadow 0.2s ease;
+        pointer-events: none;
+      }
+      #ball:hover .rings::before {
+        opacity: 1;
+        box-shadow:
+          0 0 4px rgba(255, 255, 255, 0.5),
+          0 0 8px rgba(135, 206, 250, 0.5);
+      }
+      #ball .ring-outer,
+      #ball .ring-inner {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        border-radius: 50%;
+        pointer-events: none;
+        transform: translate(-50%, -50%);
+        transform-origin: 50% 50%;
+        /* 组合 mask：中心挖洞 + 缺口弧 */
+        -webkit-mask-image: conic-gradient(
+          transparent 0deg,
+          transparent 55deg,
+          black 55deg,
+          black 360deg
+        );
+        mask-image: conic-gradient(
+          transparent 0deg,
+          transparent 55deg,
+          black 55deg,
+          black 360deg
+        );
+        -webkit-mask-size: 100% 100%;
+        mask-size: 100% 100%;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+      }
+      /* 外环：中心 0–16px 用 radial mask 挖洞，完全透出 Live2D */
+      #ball .ring-outer {
+        -webkit-mask-image:
+          radial-gradient(circle, transparent 16px, black 16px),
+          conic-gradient(
+            transparent 0deg,
+            transparent 55deg,
+            black 55deg,
+            black 360deg
+          );
+        mask-image:
+          radial-gradient(circle, transparent 16px, black 16px),
+          conic-gradient(
+            transparent 0deg,
+            transparent 55deg,
+            black 55deg,
+            black 360deg
+          );
+        -webkit-mask-composite: source-in;
+        mask-composite: intersect;
+      }
+      /* 内环：中心 0–11px 挖洞 */
+      #ball .ring-inner {
+        -webkit-mask-image:
+          radial-gradient(circle, transparent 11px, black 11px),
+          conic-gradient(
+            transparent 0deg,
+            transparent 55deg,
+            black 55deg,
+            black 360deg
+          );
+        mask-image:
+          radial-gradient(circle, transparent 11px, black 11px),
+          conic-gradient(
+            transparent 0deg,
+            transparent 55deg,
+            black 55deg,
+            black 360deg
+          );
+        -webkit-mask-composite: source-in;
+        mask-composite: intersect;
+      }
+      #ball .ring-outer {
+        width: 36px;
+        height: 36px;
+        background: radial-gradient(
+          circle at center,
+          transparent 15px,
+          rgba(255, 255, 255, 0.2) 15px,
+          rgba(255, 255, 255, 0.35) 18px,
+          transparent 18px
+        );
+        /* 去掉 inset box-shadow，避免中心区域被阴影遮挡 */
+      }
+      #ball .ring-inner {
+        width: 26px;
+        height: 26px;
+        background: radial-gradient(
+          circle at center,
+          transparent 10px,
+          rgba(255, 255, 255, 0.1) 10px,
+          rgba(255, 255, 255, 0.22) 13px,
+          transparent 13px
+        );
+        /* 无 box-shadow、无 backdrop-filter，中心 0-10px 完全透明，Live2D 可透出 */
+      }
+      #ball.spin-open .ring-outer {
+        animation: spin-outer-open 0.6s ease-out forwards;
+      }
+      #ball.spin-open .ring-inner {
+        animation: spin-inner-open 0.5s ease-out forwards;
+      }
+      #ball.spin-close .ring-outer {
+        animation: spin-outer-close 0.6s ease-out forwards;
+      }
+      #ball.spin-close .ring-inner {
+        animation: spin-inner-close 0.5s ease-out forwards;
+      }
+      @keyframes spin-outer-open {
+        from {
+          transform: translate(-50%, -50%) rotate(0deg);
+        }
+        to {
+          transform: translate(-50%, -50%) rotate(360deg);
+        }
+      }
+      @keyframes spin-inner-open {
+        from {
+          transform: translate(-50%, -50%) rotate(0deg);
+        }
+        to {
+          transform: translate(-50%, -50%) rotate(-360deg);
+        }
+      }
+      @keyframes spin-outer-close {
+        from {
+          transform: translate(-50%, -50%) rotate(0deg);
+        }
+        to {
+          transform: translate(-50%, -50%) rotate(-360deg);
+        }
+      }
+      @keyframes spin-inner-close {
+        from {
+          transform: translate(-50%, -50%) rotate(0deg);
+        }
+        to {
+          transform: translate(-50%, -50%) rotate(360deg);
+        }
+      }
+      #ball.processing .ring-outer {
+        animation: spin-outer-proc 1.2s linear infinite;
+      }
+      #ball.processing .ring-inner {
+        animation: spin-inner-proc 1s linear infinite;
+      }
+      @keyframes spin-outer-proc {
+        from {
+          transform: translate(-50%, -50%) rotate(0deg);
+        }
+        to {
+          transform: translate(-50%, -50%) rotate(360deg);
+        }
+      }
+      @keyframes spin-inner-proc {
+        from {
+          transform: translate(-50%, -50%) rotate(0deg);
+        }
+        to {
+          transform: translate(-50%, -50%) rotate(-360deg);
+        }
+      }
+      /* 仅外环悬停变宽，内环不变 */
+      #ball:hover .ring-outer {
+        background: radial-gradient(
+          circle at center,
+          transparent 15px,
+          rgba(255, 255, 255, 0.3) 15px,
+          rgba(255, 255, 255, 0.4) 21px,
+          transparent 21px
+        );
+      }
+      /* 围绕圆环左侧的三个透明玻璃小球按钮 */
+      #btn-area .glass-btns {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 80px;
+        height: 80px;
+        pointer-events: none;
+        overflow: visible;
+      }
+      #btn-area .glass-btn {
+        -webkit-app-region: no-drag;
+        app-region: no-drag;
+        position: absolute;
+        left: 32px;
+        top: 32px;
+        width: 16px;
+        height: 16px;
+        margin-left: -8px;
+        margin-top: -8px;
+        border-radius: 50%;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        pointer-events: auto;
+        background: rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        box-shadow:
+          inset 0 1px 1px rgba(255, 255, 255, 0.4),
+          0 1px 2px rgba(0, 0, 0, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease,
+          background 0.15s ease;
+      }
+      #btn-area .glass-btn:hover {
+        background: rgba(255, 255, 255, 0.32);
+        box-shadow:
+          inset 0 1px 1px rgba(255, 255, 255, 0.6),
+          0 0 8px rgba(255, 255, 255, 0.25);
+        transform: scale(1.1);
+      }
+      #btn-area .glass-btn svg {
+        width: 8px;
+        height: 8px;
+        flex-shrink: 0;
+      }
+      #btn-area .glass-btn svg path,
+      #btn-area .glass-btn svg rect {
+        fill: rgba(255, 255, 255, 0.9);
+      }
+      #btn-area .glass-btn-record .icon-play {
+        display: block;
+      }
+      #btn-area .glass-btn-record .icon-stop {
+        display: none;
+      }
+      #btn-area .glass-btn-record.listening .icon-play {
+        display: none;
+      }
+      #btn-area .glass-btn-record.listening .icon-stop {
+        display: block;
+      }
+      /* 左侧 210°~330°，半径 32px */
+      #btn-area .glass-btn-record {
+        transform: rotate(210deg) translateY(-32px) rotate(-210deg);
+      }
+      #btn-area .glass-btn-record:hover {
+        transform: rotate(210deg) translateY(-32px) rotate(-210deg) scale(1.1);
+      }
+      #btn-area .glass-btn-model {
+        transform: rotate(270deg) translateY(-32px) rotate(-270deg);
+      }
+      #btn-area .glass-btn-model:hover {
+        transform: rotate(270deg) translateY(-32px) rotate(-270deg) scale(1.1);
+      }
+      #btn-area .glass-btn-quit {
+        transform: rotate(330deg) translateY(-32px) rotate(-330deg);
+      }
+      #btn-area .glass-btn-quit:hover {
+        transform: rotate(330deg) translateY(-32px) rotate(-330deg) scale(1.1);
+      }
+      #btn-area .glass-btn-record.listening {
+        background: rgba(220, 120, 120, 0.35);
+        box-shadow:
+          inset 0 1px 1px rgba(255, 200, 200, 0.4),
+          0 0 6px rgba(200, 80, 80, 0.3);
+      }
+      #btn-area.spin-open .glass-btns {
+        animation: glass-spin-open 0.6s ease-out forwards;
+      }
+      #btn-area.spin-close .glass-btns {
+        animation: glass-spin-close 0.6s ease-out forwards;
+      }
+      @keyframes glass-spin-open {
+        from {
+          transform: rotate(-360deg);
+        }
+        to {
+          transform: rotate(0deg);
+        }
+      }
+      @keyframes glass-spin-close {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      #btn-area.processing .glass-btn-record {
+        animation: glass-pulse 1s ease-in-out infinite;
+      }
+      @keyframes glass-pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.6;
+        }
+      }
+      .pywebview-drag-region {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 44px;
+        -webkit-app-region: drag;
+        app-region: drag;
+        cursor: move;
+        z-index: 2;
+      }
+      #ball {
+        overflow: visible;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="full-panel">
+      <div class="pywebview-drag-region"></div>
+      <div id="live2d-area">
+        <div
+          id="live2d-wrap"
+          style="position: absolute; left: 0; top: 0; right: 0; bottom: 0"
+        >
+          <div
+            id="status"
+            style="
+              position: absolute;
+              left: 0;
+              top: 0;
+              right: 0;
+              bottom: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: #666;
+              font-size: 14px;
+              pointer-events: none;
+            "
+          ></div>
+          <canvas id="canvas"></canvas>
+        </div>
+      </div>
+      <div id="btn-area">
+        <div class="glass-btns">
+          <button
+            class="glass-btn glass-btn-record"
+            data-action="record"
+            title="录音"
+          >
+            <svg
+              class="icon-play"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            <svg
+              class="icon-stop"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect x="6" y="6" width="12" height="12" />
+            </svg>
+          </button>
+          <button
+            class="glass-btn glass-btn-model"
+            data-action="model"
+            title="换角色"
+          >
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+              />
+            </svg>
+          </button>
+          <button
+            class="glass-btn glass-btn-quit"
+            data-action="quit"
+            title="退出"
+          >
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div id="ball-area">
+        <div id="ball">
+          <div class="rings">
+            <div class="ring-outer"></div>
+            <div class="ring-inner"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      var _expanded = false;
+      function spinBall(direction) {
+        var ball = document.getElementById("ball");
+        var btnArea = document.getElementById("btn-area");
+        ball.classList.remove("spin-open", "spin-close");
+        btnArea.classList.remove("spin-open", "spin-close");
+        ball.offsetHeight;
+        ball.classList.add(direction === "open" ? "spin-open" : "spin-close");
+        btnArea.classList.add(
+          direction === "open" ? "spin-open" : "spin-close",
+        );
+        setTimeout(function () {
+          ball.classList.remove("spin-open", "spin-close");
+          btnArea.classList.remove("spin-open", "spin-close");
+        }, 600);
+      }
+      function showBall() {
+        _expanded = false;
+        document.getElementById("full-panel").classList.remove("expanded");
+        spinBall("close");
+        requestAnimationFrame(function () {
+          var el = document.getElementById("live2d-area");
+          if (el && typeof rescaleLive2DForViewport === "function") {
+            var w = el.clientWidth,
+              h = el.clientHeight;
+            rescaleLive2DForViewport(
+              w > 0 ? w : 44,
+              h > 0 ? h : 44,
+              typeof LIVE2D_SCALE !== "undefined" ? LIVE2D_SCALE : 1,
+            );
+          }
+        });
+      }
+      function showFull() {
+        _expanded = true;
+        document.getElementById("full-panel").classList.add("expanded");
+        spinBall("open");
+        if (typeof ensureLive2D === "function") ensureLive2D();
+        requestAnimationFrame(function () {
+          var el = document.getElementById("live2d-area");
+          if (el && typeof rescaleLive2DForViewport === "function") {
+            var w = el.clientWidth,
+              h = el.clientHeight;
+            rescaleLive2DForViewport(
+              w > 0 ? w : 320,
+              h > 0 ? h : 600,
+              typeof LIVE2D_SCALE !== "undefined" ? LIVE2D_SCALE : 1,
+            );
+          }
+        });
+      }
+      window.addEventListener("pywebviewready", function () {
+        setTimeout(function () {
+          if (typeof ensureLive2D === "function") ensureLive2D();
+        }, 100);
+        var api = function () {
+          return (
+            (typeof pywebview !== "undefined" && pywebview.api) ||
+            (window.pywebview && window.pywebview.api)
+          );
+        };
+        document.getElementById("ball-area").onclick = function (e) {
+          if (e.target.closest("#btn-area")) return;
+          e.stopPropagation();
+          if (_expanded) {
+            if (api().collapse) api().collapse();
+          } else {
+            if (api().expand) api().expand();
+          }
+        };
+        document.querySelectorAll(".glass-btn").forEach(function (btn) {
+          btn.addEventListener("click", function (e) {
+            e.stopPropagation();
+            var action = btn.dataset.action;
+            if (
+              action === "record" &&
+              api().start_listening &&
+              api().stop_listening
+            ) {
+              var recordBtn = document.querySelector(".glass-btn-record");
+              if (recordBtn.classList.contains("listening")) {
+                _micListening = false;
+                recordBtn.classList.remove("listening");
+                document.getElementById("btn-area").classList.add("processing");
+                setTimeout(function () {
+                  document
+                    .getElementById("btn-area")
+                    .classList.remove("processing");
+                }, 60000);
+                try {
+                  api().stop_listening();
+                } catch (err) {}
+              } else {
+                _micListening = true;
+                recordBtn.classList.add("listening");
+                try {
+                  api().start_listening();
+                } catch (err) {}
+              }
+            } else if (action === "model" && api().switch_model) {
+              try {
+                api().switch_model();
+              } catch (err) {}
+            } else if (action === "quit" && api().quit) {
+              api().quit();
+            }
+          });
+        });
+        var _speakQueue = [];
+        var _speakPlaying = false;
+        var _justFinishedPlaying = false;
+        function pollAndPlay(fromPlaybackComplete) {
+          if (_speakPlaying) return;
+          if (fromPlaybackComplete) _justFinishedPlaying = true;
+          fetch(location.origin + "/api/speak")
+            .then(function (r) {
+              return r.json();
+            })
+            .then(function (data) {
+              if (data && data.url) {
+                document
+                  .getElementById("btn-area")
+                  .classList.remove("processing");
+                var fullUrl =
+                  data.url.indexOf("http") === 0
+                    ? data.url
+                    : location.origin + "/" + data.url.replace(/^\//, "");
+                _speakQueue.push(fullUrl);
+                _justFinishedPlaying = false;
+              } else if (_justFinishedPlaying && data && data.agent_done) {
+                _justFinishedPlaying = false;
+                fetch(location.origin + "/api/playback-done", {
+                  method: "POST",
+                }).catch(function () {});
+              } else if (!(data && data.url)) {
+                _justFinishedPlaying = false;
+              }
+              if (!_speakPlaying && _speakQueue.length) playNext();
+            })
+            .catch(function () {
+              _justFinishedPlaying = false;
+            });
+        }
+        function playNext() {
+          if (_speakPlaying || !_speakQueue.length) return;
+          var url = _speakQueue.shift();
+          _speakPlaying = true;
+          function markDone() {
+            fetch(location.origin + "/api/playback-segment-done", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url: url }),
+            }).catch(function () {});
+            _speakPlaying = false;
+            if (_speakQueue.length) playNext();
+            else pollAndPlay(true);
+          }
+          /* 仅用 model.speak 播放，它内部会播放音频并驱动口型；不再用单独的 Audio 播放，避免同一段音频播两次造成回音 */
+          if (typeof speakToAvatar === "function") {
+            speakToAvatar(url, { onFinish: markDone, onError: markDone });
+          } else {
+            /* 无 Live2D 时退化为 Audio 播放 */
+            var audio = new Audio();
+            audio.onended = markDone;
+            audio.onerror = markDone;
+            audio.src = url;
+            audio.play().catch(markDone);
+          }
+        }
+        setInterval(pollAndPlay, 600);
+        var _micListening = false;
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.x/dist/pixi.min.js"></script>
+    <script>
+      window.PIXI = PIXI;
+    </script>
+    <script src="https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2d.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/RaSan147/pixi-live2d-display@v0.5.0-ls-8/dist/cubism2.min.js"></script>
+    <script>
+      /* Live2D 视口：展开留 80px 给四者，折叠 44×44 */
+      var LIVE2D_VIEWPORT = {
+        expanded: { w: 320, h: 600 },
+        collapsed: { w: 44, h: 44 },
+      };
+      var LIVE2D_SCALE = 1;
+      var _live2dInitialized = false;
+      var _live2dModel = null;
+      var _live2dApp = null;
+      var _currentModelName = (
+        new URLSearchParams(location.search).get("model") || "hijiki"
+      ).toLowerCase();
+      var _modelOrder = [
+        "hijiki",
+        "koharu",
+        "chitose",
+        "epsilon",
+        "tororo",
+        "izumi",
+        "shizuku",
+      ];
+      function setLive2DModelVisible(v) {
+        if (_live2dModel) _live2dModel.visible = v;
+      }
+      function rescaleLive2DForViewport(w, h, scaleFactor) {
+        if (!_live2dApp || !_live2dModel) return;
+        var vp =
+          typeof LIVE2D_VIEWPORT !== "undefined"
+            ? LIVE2D_VIEWPORT
+            : { expanded: { w: 320, h: 600 }, collapsed: { w: 44, h: 44 } };
+        w = Math.floor(Math.max(1, w || vp.collapsed.w));
+        h = Math.floor(Math.max(1, h || vp.collapsed.h));
+        _live2dApp.renderer.resize(w, h);
+        var bounds = _live2dModel.getLocalBounds();
+        var mw = bounds.width;
+        var mh = bounds.height;
+        if (!mw || !mh || mw < 0.1 || mh < 0.1) {
+          bounds = _live2dModel.getBounds();
+          mw = bounds.width || 2;
+          mh = bounds.height || 3;
+        }
+        var scale =
+          Math.min(w / mw, h / mh) *
+          (scaleFactor != null
+            ? scaleFactor
+            : typeof LIVE2D_SCALE !== "undefined"
+              ? LIVE2D_SCALE
+              : 1);
+        _live2dModel.scale.set(scale, scale);
+        _live2dModel.x = w / 2;
+        _live2dModel.y = h;
+      }
+      function setupLive2DResizeObserver() {
+        if (!_live2dApp || !_live2dModel) return;
+        var el = document.getElementById("live2d-area");
+        if (!el || !window.ResizeObserver) return;
+        var ro = new ResizeObserver(function () {
+          var w = el.clientWidth,
+            h = el.clientHeight;
+          if (w > 0 && h > 0) rescaleLive2DForViewport(w, h);
+        });
+        ro.observe(el);
+      }
+      window.switchToNextModel = function () {
+        if (!_live2dApp || !_live2dModel) return;
+        var idx = _modelOrder.indexOf(_currentModelName);
+        if (idx < 0) idx = 0;
+        var nextName = _modelOrder[(idx + 1) % _modelOrder.length];
+        _currentModelName = nextName;
+        var base = location.origin + location.pathname.replace(/\/[^/]*$/, "");
+        var fallback = {
+          hijiki: {
+            path: "/models/hijiki/hijiki.model.json",
+            cdn: "https://cdn.jsdelivr.net/npm/live2d-widget-model-hijiki@1.0.5/assets/hijiki.model.json",
+          },
+          shizuku: {
+            path: "/models/shizuku/shizuku.model.json",
+            cdn: "https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display@master/test/assets/shizuku/shizuku.model.json",
+          },
+        };
+        fetch(base + "/models/registry.json")
+          .then(function (r) {
+            return r.json();
+          })
+          .catch(function () {
+            return fallback;
+          })
+          .then(function (reg) {
+            var preset = (reg && reg[nextName]) || reg.hijiki || reg.shizuku;
+            var modelUrl =
+              preset && preset.path ? base + preset.path : preset && preset.cdn;
+            var cdnUrl = preset && preset.cdn;
+            if (!modelUrl && cdnUrl) modelUrl = cdnUrl;
+            if (!modelUrl) return;
+            _live2dApp.stage.removeChild(_live2dModel);
+            _live2dModel.destroy({ children: true });
+            return PIXI.live2d.Live2DModel.from(modelUrl).catch(function () {
+              return cdnUrl
+                ? PIXI.live2d.Live2DModel.from(cdnUrl)
+                : Promise.reject();
+            });
+          })
+          .then(function (model) {
+            if (!model) return;
+            _live2dModel = model;
+            _live2dApp.stage.addChild(model);
+            model.anchor.set(0.5, 1);
+            var vp =
+              typeof LIVE2D_VIEWPORT !== "undefined"
+                ? _expanded
+                  ? LIVE2D_VIEWPORT.expanded
+                  : LIVE2D_VIEWPORT.collapsed
+                : { w: 320, h: 600 };
+            _live2dApp.renderer.resize(vp.w, vp.h);
+            _live2dApp.renderer.render(_live2dApp.stage);
+            rescaleLive2DForViewport(
+              vp.w,
+              vp.h,
+              typeof LIVE2D_SCALE !== "undefined" ? LIVE2D_SCALE : 1,
+            );
+            setTimeout(function () {
+              rescaleLive2DForViewport(
+                vp.w,
+                vp.h,
+                typeof LIVE2D_SCALE !== "undefined" ? LIVE2D_SCALE : 1,
+              );
+            }, 100);
+          })
+          .catch(function () {});
+      };
+      window.speakToAvatar = function (audioUrl, opts) {
+        if (!_live2dModel || !_live2dModel.speak) return;
+        _live2dModel.speak(
+          audioUrl,
+          Object.assign({ crossOrigin: "anonymous" }, opts || {}),
+        );
+      };
+      window.stopAvatarSpeaking = function () {
+        if (_live2dModel && _live2dModel.stopSpeaking)
+          _live2dModel.stopSpeaking();
+      };
+      function ensureLive2D() {
+        if (_live2dInitialized) return;
+        _live2dInitialized = true;
+        initLive2D();
+      }
+      function initLive2D() {
+        const canvas = document.getElementById("canvas");
+        const status = document.getElementById("status");
+        function setStatus(msg) {
+          if (status) status.textContent = "";
+        }
+        function showErr(msg) {
+          setStatus("失败: " + msg);
+          var el = document.createElement("div");
+          el.style.cssText =
+            "position:absolute;left:0;top:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:#c00;font-size:12px;padding:20px;text-align:center;background:#fff5f5;";
+          el.textContent = "Live2D 加载失败\n" + msg;
+          canvas.parentNode.appendChild(el);
+        }
+        if (!window.PIXI || !window.PIXI.live2d) {
+          setStatus("加载中...");
+          canvas.parentNode.innerHTML =
+            '<div id="status" style="position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;"></div><canvas id="canvas"></canvas>';
+          setTimeout(function () {
+            initLive2D();
+          }, 500);
+          return;
+        }
+        setStatus("初始化 Pixi...");
+        const Application = PIXI.Application;
+        const Live2DModel = PIXI.live2d.Live2DModel;
+        if (!Application || !Live2DModel) {
+          showErr("PIXI 缺少 Application 或 Live2DModel");
+          return;
+        }
+        var vp =
+          typeof LIVE2D_VIEWPORT !== "undefined" && LIVE2D_VIEWPORT.expanded
+            ? LIVE2D_VIEWPORT.expanded
+            : { w: 400, h: 600 };
+        _live2dApp = new Application({
+          view: canvas,
+          transparent: true,
+          backgroundAlpha: 0,
+          width: vp.w,
+          height: vp.h,
+          autoStart: true,
+          resolution: 1,
+        });
+        const app = _live2dApp;
+        function loadModel(url) {
+          setStatus("加载模型中...");
+          return Live2DModel.from(url).then(function (model) {
+            _live2dModel = model;
+            app.stage.addChild(model);
+            model.anchor.set(0.5, 1);
+            var w = app.screen.width,
+              h = app.screen.height;
+            var sf = typeof LIVE2D_SCALE !== "undefined" ? LIVE2D_SCALE : 1;
+            var bounds = model.getBounds();
+            var mw = bounds.width || 2,
+              mh = bounds.height || 3;
+            var scale = Math.min(w / mw, h / mh) * sf;
+            model.scale.set(scale, scale);
+            model.x = w / 2;
+            model.y = h;
+            setStatus("OK");
+            if (status) status.style.display = "none";
+            if (
+              typeof rescaleLive2DForViewport === "function" &&
+              typeof _expanded !== "undefined" &&
+              typeof LIVE2D_VIEWPORT !== "undefined"
+            ) {
+              var vp = _expanded
+                ? LIVE2D_VIEWPORT.expanded
+                : LIVE2D_VIEWPORT.collapsed;
+              rescaleLive2DForViewport(
+                vp.w,
+                vp.h,
+                typeof LIVE2D_SCALE !== "undefined" ? LIVE2D_SCALE : 1,
+              );
+            }
+            if (typeof setupLive2DResizeObserver === "function")
+              setupLive2DResizeObserver();
+          });
+        }
+        var params = new URLSearchParams(location.search);
+        var modelName = (params.get("model") || "hijiki").toLowerCase();
+        var base = location.origin + location.pathname.replace(/\/[^/]*$/, "");
+        var fallback = {
+          hijiki: {
+            path: "/models/hijiki/hijiki.model.json",
+            cdn: "https://cdn.jsdelivr.net/npm/live2d-widget-model-hijiki@1.0.5/assets/hijiki.model.json",
+          },
+          shizuku: {
+            path: "/models/shizuku/shizuku.model.json",
+            cdn: "https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display@master/test/assets/shizuku/shizuku.model.json",
+          },
+        };
+        function doLoad(reg) {
+          var preset = (reg && reg[modelName]) || reg.hijiki || reg.shizuku;
+          var modelUrl =
+            preset && preset.path ? base + preset.path : preset.cdn;
+          var cdnUrl = preset && preset.cdn;
+          return loadModel(modelUrl).catch(function () {
+            return cdnUrl ? loadModel(cdnUrl) : Promise.reject();
+          });
+        }
+        fetch(base + "/models/registry.json")
+          .then(function (r) {
+            return r.json();
+          })
+          .then(doLoad)
+          .catch(function () {
+            return doLoad(fallback);
+          })
+          .catch(function (e) {
+            showErr((e && e.message) || String(e));
+          });
+      }
+    </script>
+  </body>
+</html>

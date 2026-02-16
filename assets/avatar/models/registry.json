@@ -1,0 +1,30 @@
+{
+  "shizuku": {
+    "path": "/models/shizuku/shizuku.model.json",
+    "cdn": "https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display@master/test/assets/shizuku/shizuku.model.json"
+  },
+  "hijiki": {
+    "path": "/models/hijiki/hijiki.model.json",
+    "cdn": "https://cdn.jsdelivr.net/npm/live2d-widget-model-hijiki@1.0.5/assets/hijiki.model.json"
+  },
+  "koharu": {
+    "path": "/models/koharu/koharu.model.json",
+    "cdn": "https://cdn.jsdelivr.net/npm/live2d-widget-model-koharu@1.0.5/assets/koharu.model.json"
+  },
+  "chitose": {
+    "path": "/models/chitose/chitose.model.json",
+    "cdn": "https://cdn.jsdelivr.net/npm/live2d-widget-model-chitose@1.0.5/assets/chitose.model.json"
+  },
+  "epsilon": {
+    "path": "/models/epsilon/Epsilon2.1.model.json",
+    "cdn": "https://cdn.jsdelivr.net/npm/live2d-widget-model-epsilon2_1@1.0.5/assets/Epsilon2.1.model.json"
+  },
+  "tororo": {
+    "path": "/models/tororo/tororo.model.json",
+    "cdn": "https://cdn.jsdelivr.net/npm/live2d-widget-model-tororo@1.0.5/assets/tororo.model.json"
+  },
+  "izumi": {
+    "path": "/models/izumi/izumi.model.json",
+    "cdn": "https://cdn.jsdelivr.net/npm/live2d-widget-model-izumi@1.0.5/assets/izumi.model.json"
+  }
+}

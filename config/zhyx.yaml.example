@@ -1,0 +1,59 @@
+# 知式 Zhyx - 主配置示例
+# Agent Skills 需运行 scripts/download_anthropic_skills.py 下载
+# 复制为 config/zhyx.yaml 并按需修改
+# 密钥等敏感信息请使用环境变量，见 .env.sample
+
+debug: false
+
+logging:
+  level: INFO
+  log_file: logs/mcp.log
+
+avatar:
+  model: "hijiki"  # hijiki|shizuku|koharu|chitose|epsilon|tororo|izumi，运行 scripts/download_models.py 下载
+
+# 大模型：通过环境变量 ZHYX_LLM_URL、ZHYX_LLM_MODEL、ZHYX_LLM_API_KEY 配置
+llm:
+  url: "https://open.bigmodel.cn/api/paas/v4"
+  model: "glm-4.7"
+  api_key: ""  # 或设环境变量 ZHYX_LLM_API_KEY
+  stream: true
+  system: "prompts/system.txt"
+
+tts:
+  voice: "zh-CN-XiaoxiaoNeural"
+  rate: "+0%"
+
+# Skills：动态加载，enabled 为空则仅 metadata
+skills:
+  directory: skills
+  writable_directory: null
+  enabled: [skill-creator, docx, pptx, xlsx, pdf]
+
+mcp:
+  servers:
+    - name: shell
+      command: zsh
+      args: ["-l", "-c", "npx -y mcp-shell"]
+    - name: memory
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-memory"]
+    # 更多见 docs/Office_MCP.md
+    # - name: chrome-devtools
+    #   command: npx
+    #   args: ["-y", "chrome-devtools-mcp@latest"]
+    # - name: modelscope
+    #   command: uvx
+    #   args: ["modelscope-mcp-server"]
+    # - name: ppt
+    #   command: uvx
+    #   args: ["--from", "office-powerpoint-mcp-server", "ppt_mcp_server"]
+    # - name: excel
+    #   command: uvx
+    #   args: ["mcp-excel-server"]
+    # - name: word
+    #   command: uvx
+    #   args: ["--from", "office-word-mcp-uvx-server", "word-mcp-server", "stdio"]
+
+stt:
+  funasr_model: "paraformer-zh"

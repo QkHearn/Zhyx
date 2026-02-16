@@ -1,0 +1,42 @@
+# 知式 Zhyx - 依赖
+# 安装: pip install -r requirements.txt
+# FunASR 需额外: pip install torch torchaudio
+
+# === 核心 ===
+python-dotenv>=1.0.0
+httpx>=0.27.0
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.0.0
+pyyaml>=6.0
+
+# === MCP 工具 ===
+mcp>=1.0.0
+
+# === TTS（edge-tts）===
+edge-tts>=6.1.0
+
+# === STT（FunASR）===
+sounddevice>=0.4.6
+numpy>=1.24.0
+funasr>=1.0.0
+modelscope>=1.9.0
+
+# === 桌面形象（pywebview）===
+pywebview>=4.0
+
+# === Office Skills（docx/pptx/xlsx）===
+openpyxl>=3.1.0
+defusedxml>=0.7.0
+lxml>=5.0.0
+
+# === PDF Skill ===
+pypdf>=4.0.0
+pdfplumber>=0.10.0
+pdf2image>=1.16.0
+Pillow>=10.0.0
+
+# === 可选：Web 自动化、GIF、MCP Builder 等 ===
+# playwright>=1.40.0
+# imageio>=2.33.0
+# anthropic>=0.18.0

@@ -1,0 +1,11 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+.venv/
+venv/
+
+# TTS 生成文件
+assets/avatar/tts/*.mp3
+assets/avatar/tts/.pending
+

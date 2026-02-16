@@ -1,0 +1,73 @@
+# 知式 Zhyx - 主配置
+
+debug: true
+
+  # 空则仅加载 metadata，不加载 body # true 时打印 STT 识别结果和大模型输出
+
+logging:
+  level: INFO
+  log_file: logs/mcp.log
+
+avatar:
+  model: "hijiki"  # 可选: hijiki | shizuku | koharu | chitose | epsilon | tororo | izumi，见 assets/avatar/README.md
+
+# 大模型（需支持流式）
+# api_format: ollama | openai（智谱/OpenAI/DeepSeek 等，自动识别）
+# Ollama: url=http://localhost:11434
+# 智谱/扣子: url 填 base（如 https://open.bigmodel.cn/api/paas/v4），需 api_key
+llm:
+  url: "https://open.bigmodel.cn/api/paas/v4"
+  model: "glm-4.7"
+  api_key: ""  # 填密钥或设环境变量 ZHYX_LLM_API_KEY
+  stream: true
+  # 系统提示词，可为字符串或文件路径（如 prompts/system.txt）
+  system: "prompts/system.txt"
+
+# TTS 音色（edge-tts）
+# 示例: zh-CN-XiaoxiaoNeural(晓晓/女) | zh-CN-YunxiNeural(云希/男) | zh-CN-YunyangNeural(云扬/男)
+# 更多: https://speech.microsoft.com/portal/voicegallery
+# rate: 语速，如 +20% 加快、-20% 放慢，默认 0%
+# read_reasoning: 是否朗读思考过程，默认 false
+tts:
+  voice: "zh-CN-XiaoxiaoNeural"
+  rate: "+20%" # 语速加快，可填 +10% ~ +50%；0% 为正常，-20% 放慢
+  read_reasoning: false  # true 时朗读 reasoning_content（思考过程）
+
+# Skills：skills/ 目录，动态加载。writable_directory 为智能体创建 skill 的位置
+skills:
+  directory: skills
+  writable_directory: null  # 默认 skills/agent_created/
+  enabled: [skill-creator, docx, pptx, xlsx, pdf]
+
+# MCP 工具：支持动态更新。修改 servers 后下次对话自动重连，或调用 POST /mcp/reload
+# Office 需 uv（brew install uv），ModelScope 需 MODELSCOPE_API_TOKEN
+mcp:
+  servers:
+    - name: shell
+      command: zsh
+      args: ["-l", "-c", "npx -y mcp-shell"]
+    - name: memory
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-memory"]
+    # - name: chrome-devtools
+    #   command: npx
+    #   args: ["-y", "chrome-devtools-mcp@latest"]
+    # ModelScope（AI 作图、模型/数据集发现等，token 从 .env 的 MODELSCOPE_API_TOKEN 读取）
+    - name: modelscope
+      command: uvx
+      args: ["modelscope-mcp-server"]
+      env:
+        MODELSCOPE_API_TOKEN: ""  # 空则从环境变量/.env 读取
+    # Office（无需安装 Microsoft Office，需 brew install uv）
+    # - name: ppt
+    #   command: uvx
+    #   args: ["--from", "office-powerpoint-mcp-server", "ppt_mcp_server"]
+    # - name: excel
+    #   command: uvx
+    #   args: ["mcp-excel-server"]
+    # - name: word
+    #   command: uvx
+    #   args: ["--from", "office-word-mcp-uvx-server", "word-mcp-server", "stdio"]
+# STT 语音识别（FunASR，首次运行自动下载模型）
+stt:
+  funasr_model: "paraformer-zh"

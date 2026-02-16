@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #333; padding: 50px; }
+    #ball {
+      display: flex;
+      width: 44px;
+      height: 44px;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: visible;
+      background: rgba(255,0,0,0.2);
+    }
+    #ball .rings { width: 36px; height: 36px; background: rgba(0,255,0,0.2); }
+    #ball .arc-btns {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 58px;
+      height: 58px;
+      margin-left: -29px;
+      margin-top: -29px;
+      z-index: 50;
+      transform: rotate(180deg);
+      background: rgba(0,0,255,0.1);
+    }
+    #ball .arc-btns svg { display: block; width: 100%; height: 100%; }
+    #ball .arc-btn {
+      position: absolute;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      border: none;
+      background: transparent;
+      padding: 0;
+    }
+    .arc-default {
+      fill: none;
+      stroke: red;
+      stroke-width: 6;
+      stroke-linecap: round;
+    }
+  </style>
+</head>
+<body>
+  <h2 style="color:white;margin-bottom:20px">弧环调试：红=ball, 绿=rings, 蓝=arc-btns, 红色弧=path</h2>
+  <div id="ball">
+    <div class="rings"></div>
+    <div class="arc-btns">
+      <button class="arc-btn arc-btn-record">
+        <svg viewBox="0 0 58 58" xmlns="http://www.w3.org/2000/svg">
+          <path class="arc-default" d="M 18.25 10.38 A 21.5 21.5 0 0 1 45.45 15.18"/>
+        </svg>
+      </button>
+      <button class="arc-btn arc-btn-model">
+        <svg viewBox="0 0 58 58" xmlns="http://www.w3.org/2000/svg">
+          <path class="arc-default" d="M 45.45 15.18 A 21.5 21.5 0 0 1 45.45 42.82"/>
+        </svg>
+      </button>
+      <button class="arc-btn arc-btn-quit">
+        <svg viewBox="0 0 58 58" xmlns="http://www.w3.org/2000/svg">
+          <path class="arc-default" d="M 45.45 42.82 A 21.5 21.5 0 0 1 18.25 47.62"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</body>
+</html>
